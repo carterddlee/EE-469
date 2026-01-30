@@ -26,6 +26,14 @@ typedef enum {
 }   stage;
 
 stage   current_stage;
+logic [31:0] registers [31:0];
+initial begin
+    for (int i=0, i< 32, i++) begin
+        registers[i]= 32'b0;
+    end
+end
+
+
 
 logic [31:0] instruction;
 logic [4:0] rd;
@@ -36,6 +44,10 @@ logic [6:0] opcode;
 logic [2:0] funct3;
 logic [6:0] funct7;
 string mnemonic;
+
+logic [31:0] rs1_data;
+logic [31:0] rs2_data;
+
 
 word    pc;
 always_comb begin # fetch stage
@@ -57,6 +69,9 @@ always_comb begin # decode stage
         opcode = instruction[6:0];
         print_instruction(pc, instruction);
         imm = find_imm(opcode, instruction);
+        rs1_data = (rs1 == 5'b0) ? 32'b0 : registers[rs1]; 
+        rs2_data = (rs2 == 5'b0) ? 32'b0 : registers[rs2];  
+
 	end
 end
 
@@ -95,5 +110,3 @@ end
 endmodule
 
 `endif
-
-
