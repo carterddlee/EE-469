@@ -47,15 +47,21 @@ string mnemonic;
 
 logic [31:0] rs1_data;
 logic [31:0] rs2_data;
-
+logic [31:0] alu_result;
 
 word    pc;
-always_comb begin # fetch stage
+always_comb begin
     if (current_stage == stage_fetch) begin
-    	inst_mem_req.addr = pc;
-        inst_mem_req.do_read  = 4'b1111;
-        inst_mem_req.valid = true;
-	end
+        inst_mem_req.addr = pc;
+        inst_mem_req.do_read = 4'b1111;
+        inst_mem_req.valid = 1'b1;
+    end else begin
+        inst_mem_req.addr = pc;
+        inst_mem_req.do_read = 4'b0000;
+        inst_mem_req.valid = 1'b0;
+    end
+    inst_mem_req.do_write = 4'b0000;
+    inst_mem_req.data = 32'b0;
 end
 
 always_comb begin # decode stage
@@ -69,29 +75,32 @@ always_comb begin # decode stage
         opcode = instruction[6:0];
         print_instruction(pc, instruction);
         imm = find_imm(opcode, instruction);
+        mnemonic = find_instruct(opcode, funct3, funct7);
         rs1_data = (rs1 == 5'b0) ? 32'b0 : registers[rs1]; 
         rs2_data = (rs2 == 5'b0) ? 32'b0 : registers[rs2];  
+        
+	end
+end
+
+always_comb begin # execute stage
+    if (current_stage == stage_execute) begin
+        case(mnemonic)
+            "add":  alu_result = rs1_data + rs2_data;
+            "sub":
+        endcase
 
 	end
 end
 
-always @(posedge clk) begin
-   if (reset)
-      pc <= reset_pc;
-
-   if (current_stage == stage_writeback)
-      pc <= pc + 4;
-end
 
 always_ff @(posedge clk) begin
     if (reset) begin
-        pc <= reset_pc;
         current_stage <= stage_fetch;
-        // Add register reset:
-        for (int i = 1; i < 32; i++) begin  // Start at 1 (x0 always 0)
+        pc <= reset_pc;
+        for (int i = 0; i < 32; i++) begin
             registers[i] <= 32'b0;
         end
-    end    else begin
+    end else begin
         case (current_stage)
             stage_fetch:
                 current_stage <= stage_decode;
@@ -101,8 +110,16 @@ always_ff @(posedge clk) begin
                 current_stage <= stage_mem;
             stage_mem:
                 current_stage <= stage_writeback;
-            stage_writeback:
+            stage_writeback: begin
+                // Register writeback
+                if (rd != 5'b0) begin
+                    registers[rd] <= alu_result;
+                end
+                // PC increment
+                pc <= pc + 4;
+                // Return to fetch
                 current_stage <= stage_fetch;
+            end
             default: begin
                 $display("Should never get here");
                 current_stage <= stage_fetch;
@@ -110,7 +127,6 @@ always_ff @(posedge clk) begin
         endcase
     end
 end
-
 
 endmodule
 
