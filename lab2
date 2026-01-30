@@ -28,8 +28,8 @@ typedef enum {
 stage   current_stage;
 logic [31:0] registers [31:0];
 initial begin
-    for (int i=0, i< 32, i++) begin
-        registers[i]= 32'b0;
+    for (int i=0; i < 32; i++) begin  
+        registers[i] = 32'b0;
     end
 end
 
@@ -83,10 +83,15 @@ always @(posedge clk) begin
       pc <= pc + 4;
 end
 
-always @(posedge clk) begin
-    if (reset)
+always_ff @(posedge clk) begin
+    if (reset) begin
+        pc <= reset_pc;
         current_stage <= stage_fetch;
-    else begin
+        // Add register reset:
+        for (int i = 1; i < 32; i++) begin  // Start at 1 (x0 always 0)
+            registers[i] <= 32'b0;
+        end
+    end    else begin
         case (current_stage)
             stage_fetch:
                 current_stage <= stage_decode;
