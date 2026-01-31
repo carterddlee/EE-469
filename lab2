@@ -4,8 +4,7 @@
 `include "base.sv"
 `include "memory_io.sv"
 `include "memory.sv"
-`include "lab1.sv"       # to use functions from lab1
-
+`include "lab1.sv"
 
 module core(
     input logic       clk
@@ -15,7 +14,7 @@ module core(
     ,input  memory_io_rsp   inst_mem_rsp
     ,output memory_io_req   data_mem_req
     ,input  memory_io_rsp   data_mem_rsp
-    );
+);
 
 typedef enum {
     stage_fetch
@@ -23,17 +22,16 @@ typedef enum {
     ,stage_execute
     ,stage_mem
     ,stage_writeback
-}   stage;
+} stage;
 
-stage   current_stage;
+stage current_stage;
 logic [31:0] registers [31:0];
+
 initial begin
-    for (int i=0; i < 32; i++) begin  
+    for (int i = 0; i < 32; i++) begin  
         registers[i] = 32'b0;
     end
 end
-
-
 
 logic [31:0] instruction;
 logic [4:0] rd;
@@ -49,7 +47,9 @@ logic [31:0] rs1_data;
 logic [31:0] rs2_data;
 logic [31:0] alu_result;
 
-word    pc;
+word pc;
+
+// Fetch stage
 always_comb begin
     if (current_stage == stage_fetch) begin
         inst_mem_req.addr = pc;
@@ -64,7 +64,8 @@ always_comb begin
     inst_mem_req.data = 32'b0;
 end
 
-always_comb begin # decode stage
+// Decode stage
+always_comb begin
     if (current_stage == stage_decode) begin
         instruction = inst_mem_rsp.data; 
         rd = instruction[11:7];
@@ -77,22 +78,61 @@ always_comb begin # decode stage
         imm = find_imm(opcode, instruction);
         mnemonic = find_instruct(opcode, funct3, funct7);
         rs1_data = (rs1 == 5'b0) ? 32'b0 : registers[rs1]; 
-        rs2_data = (rs2 == 5'b0) ? 32'b0 : registers[rs2];  
-        
-	end
+        rs2_data = (rs2 == 5'b0) ? 32'b0 : registers[rs2];
+    end else begin
+        instruction = 32'b0;
+        rd = 5'b0;
+        rs1 = 5'b0;
+        rs2 = 5'b0;
+        funct3 = 3'b0;
+        funct7 = 7'b0;
+        opcode = 7'b0;
+        imm = 32'b0;
+        mnemonic = "";
+        rs1_data = 32'b0;
+        rs2_data = 32'b0;
+    end
 end
 
-always_comb begin # execute stage
+// Execute stage
+always_comb begin
+    alu_result = 32'b0;
+    
     if (current_stage == stage_execute) begin
         case(mnemonic)
-            "add":  alu_result = rs1_data + rs2_data;
-            "sub":
+            // R-format instructions
+            "add":   alu_result = rs1_data + rs2_data;
+            "sub":   alu_result = rs1_data - rs2_data;
+            "sll":   alu_result = rs1_data << rs2_data[4:0];
+            "slt":   alu_result = ($signed(rs1_data) < $signed(rs2_data)) ? 32'd1 : 32'd0;
+            "sltu":  alu_result = (rs1_data < rs2_data) ? 32'd1 : 32'd0;
+            "xor":   alu_result = rs1_data ^ rs2_data;
+            "srl":   alu_result = rs1_data >> rs2_data[4:0];
+            "sra":   alu_result = $signed(rs1_data) >>> rs2_data[4:0];
+            "or":    alu_result = rs1_data | rs2_data;
+            "and":   alu_result = rs1_data & rs2_data;
+            
+            // I-format instructions 
+            "addi":  alu_result = rs1_data + imm;
+            "slti":  alu_result = ($signed(rs1_data) < $signed(imm)) ? 32'd1 : 32'd0;
+            "sltiu": alu_result = (rs1_data < $unsigned(imm)) ? 32'd1 : 32'd0;
+            "xori":  alu_result = rs1_data ^ imm;
+            "ori":   alu_result = rs1_data | imm;
+            "andi":  alu_result = rs1_data & imm;
+            "slli":  alu_result = rs1_data << imm[4:0];
+            "srli":  alu_result = rs1_data >> imm[4:0];
+            "srai":  alu_result = $signed(rs1_data) >>> imm[4:0];
+            
+            // U-format instructions
+            "lui":   alu_result = imm;           
+            "auipc": alu_result = pc + imm;     
+            
+            default: alu_result = 32'b0;
         endcase
-
-	end
+    end
 end
 
-
+// Sequential logic
 always_ff @(posedge clk) begin
     if (reset) begin
         current_stage <= stage_fetch;
