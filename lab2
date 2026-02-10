@@ -47,6 +47,13 @@ logic [31:0] rs1_data;
 logic [31:0] rs2_data;
 logic [31:0] alu_result;
 
+// Pipeline registers to preserve values across stages
+logic [4:0] rd_ex;           // rd for execute stage
+logic [4:0] rd_mem;          // rd for mem stage
+logic [4:0] rd_wb;           // rd for writeback stage
+logic [31:0] alu_result_mem; // alu_result for mem stage
+logic [31:0] alu_result_wb;  // alu_result for writeback stage
+
 word pc;
 
 // Fetch stage
@@ -160,6 +167,11 @@ always_ff @(posedge clk) begin
     if (reset) begin
         current_stage <= stage_fetch;
         pc <= reset_pc;
+        rd_ex <= 5'b0;
+        rd_mem <= 5'b0;
+        rd_wb <= 5'b0;
+        alu_result_mem <= 32'b0;
+        alu_result_wb <= 32'b0;
         for (int i = 0; i < 32; i++) begin
             registers[i] <= 32'b0;
         end
@@ -167,16 +179,24 @@ always_ff @(posedge clk) begin
         case (current_stage)
             stage_fetch:
                 current_stage <= stage_decode;
-            stage_decode:
+            stage_decode: begin
                 current_stage <= stage_execute;
-            stage_execute:
+                rd_ex <= rd;  // Capture rd for execute stage
+            end
+            stage_execute: begin
                 current_stage <= stage_mem;
-            stage_mem:
+                rd_mem <= rd_ex;              // Forward rd to mem
+                alu_result_mem <= alu_result; // Forward ALU result to mem
+            end
+            stage_mem: begin
                 current_stage <= stage_writeback;
+                rd_wb <= rd_mem;                 // Forward rd to writeback
+                alu_result_wb <= alu_result_mem; // Forward ALU result to writeback
+            end
             stage_writeback: begin
-                // Register writeback
-                if (rd != 5'b0) begin
-                    registers[rd] <= alu_result;
+                // Register writeback using pipeline registers
+                if (rd_wb != 5'b0) begin
+                    registers[rd_wb] <= alu_result_wb;
                 end
                 // PC increment
                 pc <= pc + 4;
