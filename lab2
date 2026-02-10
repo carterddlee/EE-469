@@ -74,8 +74,8 @@ always_comb begin
         funct3 = instruction[14:12];
         funct7 = instruction[31:25];
         opcode = instruction[6:0];
+        print_instruction(pc, instruction);  
         imm = find_imm(opcode, instruction);
-        mnemonic = find_instruct(opcode, funct3, funct7);
         rs1_data = (rs1 == 5'b0) ? 32'b0 : registers[rs1]; 
         rs2_data = (rs2 == 5'b0) ? 32'b0 : registers[rs2];
     end 
@@ -86,36 +86,72 @@ always_comb begin
     alu_result = 32'b0;
     
     if (current_stage == stage_execute) begin
-        case(mnemonic)
-            // R-format instructions
-            "add":   alu_result = rs1_data + rs2_data;
-            "sub":   alu_result = rs1_data - rs2_data;
-            "sll":   alu_result = rs1_data << rs2_data[4:0];
-            "slt":   alu_result = ($signed(rs1_data) < $signed(rs2_data)) ? 32'd1 : 32'd0;
-            "sltu":  alu_result = (rs1_data < rs2_data) ? 32'd1 : 32'd0;
-            "xor":   alu_result = rs1_data ^ rs2_data;
-            "srl":   alu_result = rs1_data >> rs2_data[4:0];
-            "sra":   alu_result = $signed(rs1_data) >>> rs2_data[4:0];
-            "or":    alu_result = rs1_data | rs2_data;
-            "and":   alu_result = rs1_data & rs2_data;
-            
-            // I-format instructions 
-            "addi":  alu_result = rs1_data + imm;
-            "slti":  alu_result = ($signed(rs1_data) < $signed(imm)) ? 32'd1 : 32'd0;
-            "sltiu": alu_result = (rs1_data < $unsigned(imm)) ? 32'd1 : 32'd0;
-            "xori":  alu_result = rs1_data ^ imm;
-            "ori":   alu_result = rs1_data | imm;
-            "andi":  alu_result = rs1_data & imm;
-            "slli":  alu_result = rs1_data << imm[4:0];
-            "srli":  alu_result = rs1_data >> imm[4:0];
-            "srai":  alu_result = $signed(rs1_data) >>> imm[4:0];
-            
-            // U-format instructions
-            "lui":   alu_result = imm;           
-            "auipc": alu_result = pc + imm;     
-            
-            default: alu_result = 32'b0;
-        endcase
+        // R‑format: opcode == 7'b0110011
+        if (opcode == 7'b0110011) begin
+            case ({funct7, funct3})
+                {7'b0000000, 3'b000}: // add
+                    alu_result = rs1_data + rs2_data;
+                {7'b0100000, 3'b000}: // sub
+                    alu_result = rs1_data - rs2_data;
+                {7'b0000000, 3'b001}: // sll
+                    alu_result = rs1_data << rs2_data[4:0];
+                {7'b0000000, 3'b010}: // slt
+                    alu_result = ($signed(rs1_data) < $signed(rs2_data)) ? 32'd1 : 32'd0;
+                {7'b0000000, 3'b011}: // sltu
+                    alu_result = (rs1_data < rs2_data) ? 32'd1 : 32'd0;
+                {7'b0000000, 3'b100}: // xor
+                    alu_result = rs1_data ^ rs2_data;
+                {7'b0000000, 3'b101}: // srl
+                    alu_result = rs1_data >> rs2_data[4:0];
+                {7'b0100000, 3'b101}: // sra
+                    alu_result = $signed(rs1_data) >>> rs2_data[4:0];
+                {7'b0000000, 3'b110}: // or
+                    alu_result = rs1_data | rs2_data;
+                {7'b0000000, 3'b111}: // and
+                    alu_result = rs1_data & rs2_data;
+                default:
+                    alu_result = 32'b0;
+            endcase
+
+        // I‑format arithmetic/logic + shifts: opcode == 7'b0010011
+        end else if (opcode == 7'b0010011) begin
+            case (funct3)
+                3'b000: // addi
+                    alu_result = rs1_data + imm;
+                3'b001: // slli
+                    alu_result = rs1_data << imm[4:0];
+                3'b010: // slti
+                    alu_result = ($signed(rs1_data) < $signed(imm)) ? 32'd1 : 32'd0;
+                3'b011: // sltiu
+                    alu_result = (rs1_data < $unsigned(imm)) ? 32'd1 : 32'd0;
+                3'b100: // xori
+                    alu_result = rs1_data ^ imm;
+                3'b101: begin
+                    if (imm[10]) begin // srai
+                        alu_result = $signed(rs1_data) >>> imm[4:0];
+                    end else begin   // srli
+                        alu_result = rs1_data >> imm[4:0];
+                    end
+                end
+                3'b110: // ori
+                    alu_result = rs1_data | imm;
+                3'b111: // andi
+                    alu_result = rs1_data & imm;
+                default:
+                    alu_result = 32'b0;
+            endcase
+
+        // U‑format
+        end else if (opcode == 7'b0110111) begin // lui
+            alu_result = imm;
+
+        end else if (opcode == 7'b0010111) begin // auipc
+            alu_result = pc + imm;
+
+        end else begin
+            // unsupported instruction → 0
+            alu_result = 32'b0;
+        end
     end
 end
 
