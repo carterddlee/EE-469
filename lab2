@@ -74,24 +74,11 @@ always_comb begin
         funct3 = instruction[14:12];
         funct7 = instruction[31:25];
         opcode = instruction[6:0];
-        print_instruction(pc, instruction);
         imm = find_imm(opcode, instruction);
         mnemonic = find_instruct(opcode, funct3, funct7);
         rs1_data = (rs1 == 5'b0) ? 32'b0 : registers[rs1]; 
         rs2_data = (rs2 == 5'b0) ? 32'b0 : registers[rs2];
-    end else begin
-        instruction = 32'b0;
-        rd = 5'b0;
-        rs1 = 5'b0;
-        rs2 = 5'b0;
-        funct3 = 3'b0;
-        funct7 = 7'b0;
-        opcode = 7'b0;
-        imm = 32'b0;
-        mnemonic = "";
-        rs1_data = 32'b0;
-        rs2_data = 32'b0;
-    end
+    end 
 end
 
 // Execute stage
