@@ -1,0 +1,57 @@
+// Top file used for iverilog.  Note this is mostly a stub that includes the 
+// top which Verilator uses.
+`include "top.sv" 
+
+`timescale 1ns / 1ps
+
+module itop();
+
+logic clk = 0;
+logic reset = 1;
+logic halt;
+
+top the_top(
+    .clk(clk)
+    ,.reset(reset)
+    ,.halt(halt));
+
+always #5 clk = ~clk;
+
+initial begin
+    $dumpfile("test.vcd");
+    $dumpvars(0);
+    reset = 1;
+    #16 reset = 0;
+end
+
+always #15 if (halt == 1'b1) $finish;
+
+// ========== ADD THIS SECTION ==========
+// Register checker for start.s
+integer cycle_count = 0;
+
+always @(posedge clk) begin
+    cycle_count = cycle_count + 1;
+    
+    if (cycle_count == 30) begin
+        $display("\n========================================");
+        $display("Register Check for start.s");
+        $display("========================================");
+        $display("x14 (a4) = 0x%08h  (expected: 0x0100fe4c)", the_top.the_core.registers[14]);
+        $display("x15 (a5) = 0x%08h  (expected: 0x0201fc98)", the_top.the_core.registers[15]);
+        $display("========================================");
+        
+        if (the_top.the_core.registers[14] == 32'h0100fe4c && 
+            the_top.the_core.registers[15] == 32'h0201fc98) begin
+            $display("✓ ALL TESTS PASSED");
+        end else begin
+            $display("✗ TEST FAILED");
+        end
+        
+        $display("========================================\n");
+        $finish;
+    end
+end
+// ========== END OF ADDED SECTION ==========
+
+endmodule
